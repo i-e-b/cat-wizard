@@ -13,7 +13,12 @@ local lastDecision = "..."
 local screenScale, screenWidth, screenHeight
 local fadeColor = {r=255, g=100, b=40, a=255}
 
-local ghosts = { "I-I^V", "--IIVV", "V^V^", "VIVIV" }
+local ghosts = {
+  {x=20,  y=20,  hurt=0.0, speed=14, pat="I-I^V"}, -- speed is seconds from edge to centre
+  {x=740, y=20,  hurt=0.0, speed=17, pat="--IIVV"},
+  {x=20,  y=550, hurt=0.0, speed=17, pat="V^V^"},
+  {x=740, y=550, hurt=0.0, speed=17, pat="VIVIV"}
+}
 
 function love.load()
   px = 0
@@ -23,7 +28,7 @@ function love.load()
   screenScale = (screenWidth + screenHeight) / 200
 
   textfont = love.graphics.newFont( 14 )
-  symfont = love.graphics.newImageFont("assets/font.png", "<I-V^G")
+  symfont = love.graphics.newImageFont("assets/font.png", "<I-V^Gg")
 end
 
 function vecMoreThanTwo(newDir, oldDir)
@@ -105,26 +110,14 @@ function setFadeColor(type)
   end
 end
 
-function attackGhosts(type)
-  for i=1,#ghosts do
-    if (string.sub (ghosts[i], 1, 1) == type) then
-      ghosts[i] = string.sub (ghosts[i], 2)
-    end
-  end
-end
-
-function love.update(dt)
-  if dt > 0.7 then return end
-
-  fadeColor.a = math.max(0, fadeColor.a * 0.9) -- (dt*255))
-
-  if not love.mouse.isDown(1) then
-    if #points > 0 then
+function handleInput(pressed, x, y)
+  if not pressed then
+    if #points > 0 then -- user just finished drawing a shape
       fadePoints = points
       points = {}
-      lastDecision = decide(directions)
-      attackGhosts(lastDecision)
-      setFadeColor(lastDecision)
+      lastDecision = decide(directions) -- figure out the shape
+      attackGhosts(lastDecision)        -- remove matching initial symbol from all ghosts
+      setFadeColor(lastDecision)        -- set color based on shape, for fade effect
     end
     lastDir = -1
     return
@@ -134,7 +127,6 @@ function love.update(dt)
     end
   end
 
-  local x,y = love.mouse.getPosition()
   if ( math.abs(px - x) + math.abs(py - y) > screenScale * 4 ) then
     table.insert(points, x)
     table.insert(points, y)
@@ -151,6 +143,64 @@ function love.update(dt)
     px = x
     py = y
   end
+end
+
+function readInputs()
+  local x,y
+
+  if love.mouse.isDown(1) then
+    x,y = love.mouse.getPosition()
+    handleInput(true, x, y)
+    return
+  end
+
+  local touches = love.touch.getTouches()
+  if (#touches > 0) then -- pick any touch and go with than
+    for i, id in ipairs(touches) do x,y = love.touch.getPosition(id) end
+    handleInput(pressed, x, y)
+    return
+  end
+
+  handleInput(false, 0, 0)
+end
+
+function attackGhosts(type)
+  for i=1,#ghosts do
+    if (string.sub (ghosts[i].pat, 1, 1) == type) then
+      ghosts[i].pat = string.sub (ghosts[i].pat, 2)
+      ghosts[i].hurt = 0.5 -- time of hurt left
+    end
+  end
+end
+
+function moveGhosts(dt)
+  local cx = screenWidth / 2
+  local cy = screenHeight / 2
+  for i=1,#ghosts do
+    local g = ghosts[i]
+    g.hurt = math.max(0, g.hurt - dt)
+
+    -- vector to centre
+    local dx = cx - g.x
+    local dy = cy - g.y
+    local s = math.sqrt(dx*dx + dy*dy)
+    if (s ~= 0) then dx = cx * (dx / s); dy = cy * (dy / s) end
+
+    -- ghosts back up slowly when hurt
+    if (g.hurt > 0) then dx = -dx / 2; dy = -dy / 2 end
+
+    g.x = g.x + (dt * dx / g.speed)
+    g.y = g.y + (dt * dy / g.speed)
+  end
+end
+
+function love.update(dt)
+  if dt > 0.7 then return end
+
+  fadeColor.a = math.max(0, fadeColor.a * 0.9)
+
+  moveGhosts(dt)
+  readInputs()
 end
 
 
@@ -181,7 +231,10 @@ function love.draw()
   love.graphics.setFont(symfont)
   love.graphics.setColor(255, 255, 255, 255)
   for i=1,#ghosts do
-    love.graphics.print(ghosts[i], screenWidth - 170, (i-1) * 140)
-    love.graphics.print("G", screenWidth - 170, 40 + (i-1) * 140)
+    local g = ghosts[i]
+    local glyph = "G"; if g.hurt > 0 then glyph = "g" end
+    local bob = math.sin(0.1 * g.x) * 4
+    love.graphics.print(g.pat, g.x - 22, bob + g.y - 52, 0, screenScale / 10)
+    love.graphics.print(glyph, g.x - 22, bob + g.y - 22, 0, screenScale / 10)
   end
 end
