@@ -1,12 +1,18 @@
 #Todo:
 
- [ ] cat
+ [x] cat
  [x] magic symbols
+ [ ] cat casting animation
  [ ] health
  [ ] damage
  [x] basic ghost patterns and movement
- [ ] ghost death
+ [x] ghost death
+ [ ] heart ghost
+ [ ] lightening ghost
  [ ] levels
+ [ ] end of level
  [ ] general graphics
  [ ] boss ghosts
- [ ] test on phone
+ [x] test on phone
+ [ ] background images
+ [ ] score and bonuses

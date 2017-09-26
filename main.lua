@@ -273,14 +273,4 @@ function love.draw()
   drawCat()
   drawGhosts()
   drawMagic()
-
---[[ diagnistics
-  love.graphics.setFont(textfont)
-
-  love.graphics.setColor(255, 255, 255, 255)
-  for i=1,#directions do
-    love.graphics.print(directions[i], 10 + (i*8), 10)
-  end
-  love.graphics.print(lastDecision, 20, 40)
-  ]]
 end
