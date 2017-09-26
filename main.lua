@@ -1,21 +1,25 @@
 
 local points = {}
 local fadePoints = {}
-local symfont, textfont
+local ghostFont, textfont, catfont
 
 -- 1  0  7
 -- 2  *  6
 -- 3  4  5
 local directions = {} -- 0: N, 1: NW, 2:W, 3:SW, 4:S, 5:SE, 6:E, 7:NE -- 0: N, 1: NW, 2:W, 3:SW, 4:S, 5:SE, 6:E, 7:NE
-local px, py
+local px, py, globalTime
 local lastDir = -1
 local lastDecision = "..."
 local screenScale, screenWidth, screenHeight
 local fadeColor = {r=255, g=100, b=40, a=255}
 
+local cat = {
+  active=false
+}
+
 local ghosts = {
-  {x=20,  y=20,  hurt=0.0, speed=14, pat="I-I^V"}, -- speed is seconds from edge to centre
-  {x=740, y=20,  hurt=0.0, speed=17, pat="--IIVV"},
+  {x=20,  y=20,  hurt=0.0, speed=14, pat="I-I^V"},  -- speed is seconds from edge to centre
+  {x=740, y=20,  hurt=0.0, speed=17, pat="--IIVV"}, -- 'dead' get set when the ghost is defeated
   {x=20,  y=550, hurt=0.0, speed=17, pat="V^V^"},
   {x=740, y=550, hurt=0.0, speed=17, pat="VIVIV"}
 }
@@ -23,12 +27,14 @@ local ghosts = {
 function love.load()
   px = 0
   py = 0
+  globalTime = 0
 
   screenWidth, screenHeight = love.graphics.getDimensions()
   screenScale = (screenWidth + screenHeight) / 200
 
   textfont = love.graphics.newFont( 14 )
-  symfont = love.graphics.newImageFont("assets/font.png", "<I-V^Gg")
+  ghostFont = love.graphics.newImageFont("assets/ghostfont.png", "<I-V^Ggd")
+  catFont = love.graphics.newImageFont("assets/catfont.png", "012345[]")
 end
 
 function vecMoreThanTwo(newDir, oldDir)
@@ -111,6 +117,7 @@ function setFadeColor(type)
 end
 
 function handleInput(pressed, x, y)
+  cat.active = pressed
   if not pressed then
     if #points > 0 then -- user just finished drawing a shape
       fadePoints = points
@@ -166,9 +173,10 @@ end
 
 function attackGhosts(type)
   for i=1,#ghosts do
-    if (string.sub (ghosts[i].pat, 1, 1) == type) then
-      ghosts[i].pat = string.sub (ghosts[i].pat, 2)
-      ghosts[i].hurt = 0.5 -- time of hurt left
+    local g = ghosts[i]
+    if (string.sub (g.pat, 1, 1) == type) then
+      g.pat = string.sub (g.pat, 2)
+      g.hurt = 0.5 -- time of hurt left
     end
   end
 end
@@ -178,36 +186,60 @@ function moveGhosts(dt)
   local cy = screenHeight / 2
   for i=1,#ghosts do
     local g = ghosts[i]
-    g.hurt = math.max(0, g.hurt - dt)
+    if (g.pat == "" and g.hurt < 0.04) then
+      g.dead = true
+    end
+    if not g.dead then
+      g.hurt = math.max(0, g.hurt - dt)
 
-    -- vector to centre
-    local dx = cx - g.x
-    local dy = cy - g.y
-    local s = math.sqrt(dx*dx + dy*dy)
-    if (s ~= 0) then dx = cx * (dx / s); dy = cy * (dy / s) end
+      -- vector to centre
+      local dx = cx - g.x
+      local dy = cy - g.y
+      local s = math.sqrt(dx*dx + dy*dy)
+      if (s ~= 0) then dx = cx * (dx / s); dy = cy * (dy / s) end
 
-    -- ghosts back up slowly when hurt
-    if (g.hurt > 0) then dx = -dx / 2; dy = -dy / 2 end
+      -- ghosts back up slowly when hurt
+      if (g.hurt > 0) then dx = -dx / 2; dy = -dy / 2 end
 
-    g.x = g.x + (dt * dx / g.speed)
-    g.y = g.y + (dt * dy / g.speed)
+      g.x = g.x + (dt * dx / g.speed)
+      g.y = g.y + (dt * dy / g.speed)
+    end
   end
 end
 
 function love.update(dt)
   if dt > 0.7 then return end
 
+  globalTime = globalTime + dt
   fadeColor.a = math.max(0, fadeColor.a * 0.9)
 
   moveGhosts(dt)
   readInputs()
 end
 
+function drawGhosts()
+  love.graphics.setFont(ghostFont)
+  for i=1,#ghosts do
+    local g = ghosts[i]
+    if not g.dead then
+      local glyph = "G";
+      love.graphics.setColor(255, 255, 255, 255)
+      if g.hurt > 0 then
+        if g.pat == "" then
+          glyph = "d"
+          love.graphics.setColor(255, 255, 255, 255 * g.hurt)
+        else
+          glyph = "g"
+        end
+      end
+      local bob = math.sin(0.1 * g.x) * 4
+      love.graphics.print(g.pat, g.x - 22, bob + g.y - 52, 0, screenScale / 10)
+      love.graphics.print(glyph, g.x - 22, bob + g.y - 22, 0, screenScale / 10)
+    end
+  end
+end
 
-function love.draw()
-  -- draw points
-
-  love.graphics.setFont(textfont)
+function drawMagic()
   love.graphics.setLineWidth( screenScale )
   love.graphics.setLineJoin( "none" )
 
@@ -216,25 +248,39 @@ function love.draw()
     love.graphics.line(fadePoints)
   end
 
-  love.graphics.setColor(255, 255, 127, 255)
+  love.graphics.setColor(255, 255, 255, 127)
   if #points > 3 then
     love.graphics.line(points)
   end
+end
+
+function drawCat()
+  love.graphics.setFont(catFont)
+  love.graphics.setColor(255, 255, 255, 255)
+
+  if cat.active then
+    local glyph = ""..math.floor((globalTime * 10) % 6)
+    love.graphics.print(glyph, screenWidth/2 - 22,screenHeight/2 - 22, 0, screenScale / 10)
+  else
+    local glyph = "["; if math.floor((globalTime * 0.4) % 2) > 0 then glyph = "]" end
+    love.graphics.print(glyph, screenWidth/2 - 22,screenHeight/2 - 22, 0, screenScale / 10)
+  end
+end
+
+function love.draw()
+  love.graphics.setBackgroundColor( 70, 40, 40 )
+
+  drawCat()
+  drawGhosts()
+  drawMagic()
+
+--[[ diagnistics
+  love.graphics.setFont(textfont)
 
   love.graphics.setColor(255, 255, 255, 255)
   for i=1,#directions do
     love.graphics.print(directions[i], 10 + (i*8), 10)
   end
   love.graphics.print(lastDecision, 20, 40)
-
-
-  love.graphics.setFont(symfont)
-  love.graphics.setColor(255, 255, 255, 255)
-  for i=1,#ghosts do
-    local g = ghosts[i]
-    local glyph = "G"; if g.hurt > 0 then glyph = "g" end
-    local bob = math.sin(0.1 * g.x) * 4
-    love.graphics.print(g.pat, g.x - 22, bob + g.y - 52, 0, screenScale / 10)
-    love.graphics.print(glyph, g.x - 22, bob + g.y - 22, 0, screenScale / 10)
-  end
+  ]]
 end
