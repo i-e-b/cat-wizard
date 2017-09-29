@@ -11,18 +11,22 @@ local px, py, globalTime
 local lastDir = -1
 local lastSpell = "..."
 local screenScale, screenWidth, screenHeight, gs
+local screenCentre = {}
 local fadeColor = {r=255, g=100, b=40, a=255}
 local backgrounds = {}
+local castingFonts = {}
 
 local cat = {
   active=false,
-  walkOffset = 0
+  walkOffset = 0,
+  casting = 0, -- spell casting animation times
+  zap = 0,     -- lightening zap animation time
 }
 
 local ghosts = {
-  {x=20,  y=20,  hurt=0.0, speed=14, pat="I"}, --  -I^V"},  -- speed is seconds from edge to centre
-  {x=740, y=20,  hurt=0.0, speed=17, pat="-"}, --  -IIVV"}, -- 'dead' get set when the ghost is defeated
-  {x=20,  y=550, hurt=0.0, speed=17, pat="V"}, --  ^V^"},
+  {x=20,  y=20,  hurt=0.0, speed=14, pat="^I"}, --  -I^V"},  -- speed is seconds from edge to centre
+  {x=740, y=20,  hurt=0.0, speed=17, pat="-I"}, --  -IIVV"}, -- 'dead' get set when the ghost is defeated
+  {x=20,  y=550, hurt=0.0, speed=17, pat="VI"}, --  ^V^"},
   {x=740, y=550, hurt=0.0, speed=17, pat="Z"}, --  IVIV"}
 }
 
@@ -35,11 +39,20 @@ function love.load()
   screenWidth, screenHeight = love.graphics.getDimensions()
   screenScale = (screenWidth + screenHeight) / 200
 
+  screenCentre.x = screenWidth/2
+  screenCentre.y = screenHeight/2
+
   table.insert(backgrounds, love.graphics.newImage("assets/bg1.png"))
 
   textfont = love.graphics.newFont( 14 )
   ghostFont = love.graphics.newImageFont("assets/ghostfont.png", "<I-V^ZGgd")
   catFont = love.graphics.newImageFont("assets/catfont.png", "012345[]abcdefg")
+  castingFonts["V"] = love.graphics.newImageFont("assets/Vfont.png", "012345")
+  castingFonts["^"] = love.graphics.newImageFont("assets/Hatfont.png", "012345")
+end
+
+function love.keypressed(key)
+  if key == 'escape' then love.event.quit() end
 end
 
 function vecMoreThanTwo(newDir, oldDir)
@@ -176,12 +189,32 @@ function readInputs()
   handleInput(false, 0, 0)
 end
 
-function attackGhosts(type)
+function anyLightningGhost()
   for i=1,#ghosts do
-    local g = ghosts[i]
-    if (string.sub (g.pat, 1, 1) == type) then
-      g.pat = string.sub (g.pat, 2)
-      g.hurt = 0.5 -- time of hurt left
+    if (string.sub (ghosts[i].pat, 1, 1) == "Z") then return true end
+  end
+  return false
+end
+
+function attackGhosts(type)
+  if (type == "Z") then -- if there is any match, all ghosts get frazzled
+    if anyLightningGhost() then
+      cat.casting = 1
+      for i=1,#ghosts do
+        local g = ghosts[i]
+        g.pat = string.sub (g.pat, 2)
+        g.hurt = 1 -- time of hurt left
+        cat.zap = 1 -- time of zap left
+      end
+    end
+  else
+    for i=1,#ghosts do
+      local g = ghosts[i]
+      if (string.sub (g.pat, 1, 1) == type) then
+        cat.casting = 1
+        g.pat = string.sub (g.pat, 2)
+        g.hurt = 0.5 -- time of hurt left
+      end
     end
   end
 end
@@ -192,7 +225,7 @@ function moveGhosts(dt)
   local cy = screenHeight / 2
   for i=1,#ghosts do
     local g = ghosts[i]
-    if (g.pat == "" and g.hurt < 0.04) then
+    if (g.pat == "" and g.hurt < 0.04 and cat.zap < 0.04) then
       g.dead = true
     end
     if not g.dead then
@@ -208,21 +241,25 @@ function moveGhosts(dt)
       -- ghosts back up slowly when hurt
       if (g.hurt > 0) then dx = -dx / 2; dy = -dy / 2 end
 
-      g.x = g.x + (dt * dx / g.speed)
-      g.y = g.y + (dt * dy / g.speed)
+      if (cat.zap < 0.04) then
+        g.x = g.x + (dt * dx / g.speed)
+        g.y = g.y + (dt * dy / g.speed)
+      end
     end
   end
   if (activeGhosts < 1) then ghosts = {} end
 end
 
 function moveCat(dt)
-    if #ghosts < 1 then -- phase over / level over?
-      cat.walkOffset = cat.walkOffset + dt*30*screenScale
-      if (cat.walkOffset > (screenWidth / 2)) then -- off screen, now transition
-        cat.walkOffset = -(screenWidth / 2)
-        --TODO
-      end
+  cat.zap = math.max(0, cat.zap - dt)
+  cat.casting = math.max(0, cat.casting - dt)
+  if #ghosts < 1 then -- phase over / level over?
+    cat.walkOffset = cat.walkOffset + dt*30*screenScale
+    if (cat.walkOffset > screenCentre.x) then -- off screen, now transition
+      cat.walkOffset = -(screenCentre.x)
+      --TODO
     end
+  end
 end
 
 function love.update(dt)
@@ -235,6 +272,18 @@ function love.update(dt)
   moveCat(dt)
   readInputs()
   love.graphics.setBackgroundColor( 40, 40, 70 )
+end
+
+function drawZap(x,y)
+  local dx1 = (math.random() * 10) - 5
+  local dx2 = (math.random() * 10) - 5
+  local ss = screenScale * 2
+
+  for i=0,y,ss do
+    love.graphics.line(x + dx1, i - ss, x + dx2, i)
+    dx1 = dx2
+    dx2 = (math.random() * 10) - 5
+  end
 end
 
 function drawGhosts()
@@ -275,30 +324,53 @@ function drawMagic()
   if #points > 3 then
     love.graphics.line(points)
   end
+
+  if cat.zap > 0 then
+    love.graphics.setColor(255, 255, 0, math.min(255, cat.zap * 255))
+
+    for i=1,#ghosts do
+      local g = ghosts[i]
+      if not g.dead then
+        drawZap(g.x,g.y)
+      end
+    end
+  end
 end
 
 function drawCat()
   love.graphics.setFont(catFont)
   love.graphics.setColor(255, 255, 255, 255)
   local ds = 22 * screenScale / gs
-  local cx = screenWidth/2 - ds
-  local cy = screenHeight/2 - ds
+  local ss = screenScale / gs
+  local cx = screenCentre.x - ds
+  local cy = screenCentre.y - ds
 
   if #ghosts < 1 then -- phase over / level over?
     local glyph = string.char(98 + math.floor((globalTime * 10) % 6))
-    love.graphics.print(glyph, cat.walkOffset + cx,cy, 0, screenScale / gs)
+    love.graphics.print(glyph, cat.walkOffset + cx,cy, 0, ss)
   elseif cat.active then
     local glyph = ""..math.floor((globalTime * 10) % 6)
-    love.graphics.print(glyph, cx,cy, 0, screenScale / gs)
+    love.graphics.print(glyph, cx,cy, 0, ss)
+  elseif cat.casting > 0 then
+    local f = castingFonts[lastSpell]
+    if (f ~= nil) then
+      love.graphics.setFont(f)
+      local glyph = ""..math.floor(6 - (cat.casting*6))
+      love.graphics.print(glyph, cx - 10, cy - 70, 0, ss)
+    end
   else
     local glyph = "["; if math.floor((globalTime * 0.4) % 2) > 0 then glyph = "]" end
-    love.graphics.print(glyph, cx,cy, 0, screenScale / gs)
+    love.graphics.print(glyph, cx,cy, 0, ss)
   end
 end
 
 function love.draw()
+  if cat.zap > 0 then
+    love.graphics.setColor(127, 127, 127, 255)
+  else
+    love.graphics.setColor(255, 255, 255, 255)
+  end
   local width, height = backgrounds[1]:getDimensions()
-
   love.graphics.draw( backgrounds[1], 0, 0, 0, screenWidth/width, screenHeight/height)
 
   drawCat()
