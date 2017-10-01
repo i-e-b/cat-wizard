@@ -19,12 +19,13 @@ local castingFonts = {}
 local cat = {
   active=false,
   walkOffset = 0,
+  health = 5,
   casting = 0, -- spell casting animation times
   zap = 0,     -- lightening zap animation time
 }
 
 local ghosts = {
-  {x=20,  y=20,  hurt=0.0, speed=14, pat="<^I"}, --  -I^V"},  -- speed is seconds from edge to centre
+  {x=20,  y=20,  hurt=0.0, speed=14, pat="^I"}, --  -I^V"},  -- speed is seconds from edge to centre
   {x=740, y=20,  hurt=0.0, speed=17, pat="-I"}, --  -IIVV"}, -- 'dead' get set when the ghost is defeated
   {x=20,  y=550, hurt=0.0, speed=17, pat="VI"}, --  ^V^"},
   {x=740, y=550, hurt=0.0, speed=17, pat="Z"}, --  IVIV"}
@@ -45,7 +46,7 @@ function love.load()
   table.insert(backgrounds, love.graphics.newImage("assets/bg1.png"))
 
   textfont = love.graphics.newFont( 14 )
-  ghostFont = love.graphics.newImageFont("assets/ghostfont.png", "<I-V^ZGgd")
+  ghostFont = love.graphics.newImageFont("assets/ghostfont.png", "<I-V^ZGgdHhCc")
   catFont = love.graphics.newImageFont("assets/catfont.png", "012345[]abcdefg")
   castingFonts["V"] = love.graphics.newImageFont("assets/Vfont.png", "012345")
   castingFonts["^"] = love.graphics.newImageFont("assets/Hatfont.png", "012345")
@@ -223,18 +224,30 @@ function attackGhosts(type)
   end
 end
 
+function biteCat(ghost)
+  -- lose some health, send the ghost backward
+  ghost.bite = ghost.speed / 4
+  ghost.glyph = "c"
+  cat.health = math.max(0, cat.health - 1)
+end
+
 function moveGhosts(dt)
   local activeGhosts = 0
   local cx = screenWidth / 2
   local cy = screenHeight / 2
+  local ss = screenScale / gs
+
   for i=1,#ghosts do
     local g = ghosts[i]
+    if not g.bite then g.bite = 0 end
     if (g.pat == "" and g.hurt < 0.04 and cat.zap < 0.04) then
       g.dead = true
     end
     if not g.dead then
       activeGhosts = activeGhosts + 1
       g.hurt = math.max(0, g.hurt - dt)
+      g.bite = math.max(0, g.bite - dt)
+      g.glyph = "G"
 
       -- vector to centre
       local dx = cx - g.x
@@ -242,8 +255,21 @@ function moveGhosts(dt)
       local s = math.sqrt(dx*dx + dy*dy)
       if (s ~= 0) then dx = cx * (dx / s); dy = cy * (dy / s) end
 
-      -- ghosts back up slowly when hurt
-      if (g.hurt > 0) then dx = -dx / 2; dy = -dy / 2 end
+      local dist = math.sqrt(math.pow(screenCentre.x - g.x, 2) + math.pow(screenCentre.y - g.y, 2))
+      local f = 1; if (g.x < screenCentre.x) then f = -1 end
+
+
+      if (g.hurt > 0) then -- ghosts back up slowly when hurt
+        dx = -dx / 2; dy = -dy / 2
+      elseif (g.bite > 0) then -- ghosts back up fast after a bite
+        dx = -dx * 4; dy = -dy * 4
+        g.glyph = "c"
+      elseif (dist < 1) then
+        biteCat(g)
+        g.glyph = "c"
+      elseif (dist < ss * 27) then
+        g.glyph = "C"
+      end
 
       if (cat.zap < 0.04) then
         g.x = g.x + (dt * dx / g.speed)
@@ -293,12 +319,12 @@ end
 function drawGhosts()
   love.graphics.setFont(ghostFont)
   local ss = screenScale / gs
-  local ds = 22 * ss
+  local ds = 30 * ss
 
   for i=1,#ghosts do
     local g = ghosts[i]
     if not g.dead then
-      local glyph = "G";
+      local glyph = g.glyph;
       love.graphics.setColor(255, 255, 255, 255)
       if g.hurt > 0 then
         if g.pat == "" then
@@ -309,8 +335,12 @@ function drawGhosts()
         end
       end
       local bob = math.sin(0.1 * g.x) * 4
-      love.graphics.print(g.pat, g.x - ds, bob + g.y - 2*ds, 0, ss)
-      love.graphics.print(glyph, g.x - ds, bob + g.y - ds, 0, ss)
+      local f = 1
+      local sy = 0
+      if (g.x < screenCentre.x) then f = -1; sy = 2*ds end
+
+      love.graphics.print(g.pat, g.x - sy, bob + g.y - 2*ds, 0, ss, ss)
+      love.graphics.print(glyph, g.x, bob + g.y - ds, 0, ss*f, ss)
     end
   end
 end
@@ -342,12 +372,24 @@ function drawMagic()
 end
 
 function drawCat()
-  love.graphics.setFont(catFont)
   love.graphics.setColor(255, 255, 255, 255)
   local ds = 22 * screenScale / gs
   local ss = screenScale / gs
-  local cx = screenCentre.x - ds
+  local cx = screenCentre.x - ds*2
   local cy = screenCentre.y - ds
+
+  -- Health
+  love.graphics.setFont(ghostFont)
+  for i=1,cat.health do
+    love.graphics.print("H", ss*40*i, 10, 0, ss)
+  end
+  for i=cat.health+1,5 do
+    love.graphics.print("h", ss*40*i, 10, 0, ss)
+  end
+
+
+  -- Cat
+  love.graphics.setFont(catFont)
 
   if #ghosts < 1 then -- phase over / level over?
     local glyph = string.char(98 + math.floor((globalTime * 10) % 6))

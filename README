@@ -3,8 +3,9 @@
  [x] cat
  [x] magic symbols
  [x] cat casting animations
- [ ] health
- [ ] damage
+ [x] health
+ [x] damage
+ [ ] game over
  [x] basic ghost patterns and movement
  [x] ghost death
  [ ] heart ghost
