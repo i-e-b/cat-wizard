@@ -24,7 +24,7 @@ local cat = {
 }
 
 local ghosts = {
-  {x=20,  y=20,  hurt=0.0, speed=14, pat="^I"}, --  -I^V"},  -- speed is seconds from edge to centre
+  {x=20,  y=20,  hurt=0.0, speed=14, pat="<^I"}, --  -I^V"},  -- speed is seconds from edge to centre
   {x=740, y=20,  hurt=0.0, speed=17, pat="-I"}, --  -IIVV"}, -- 'dead' get set when the ghost is defeated
   {x=20,  y=550, hurt=0.0, speed=17, pat="VI"}, --  ^V^"},
   {x=740, y=550, hurt=0.0, speed=17, pat="Z"}, --  IVIV"}
@@ -49,6 +49,10 @@ function love.load()
   catFont = love.graphics.newImageFont("assets/catfont.png", "012345[]abcdefg")
   castingFonts["V"] = love.graphics.newImageFont("assets/Vfont.png", "012345")
   castingFonts["^"] = love.graphics.newImageFont("assets/Hatfont.png", "012345")
+  castingFonts["Z"] = love.graphics.newImageFont("assets/Zfont.png", "012345")
+  castingFonts["I"] = love.graphics.newImageFont("assets/Ifont.png", "012345")
+  castingFonts["-"] = love.graphics.newImageFont("assets/-font.png", "012345")
+  castingFonts["<"] = love.graphics.newImageFont("assets/heartfont.png", "012345")
 end
 
 function love.keypressed(key)
@@ -117,7 +121,7 @@ function decide(ds)
   if (p == "363") or (p == "364") or (p == "463") or (p == "464") or (p == "353") then return "Z" end
 
   -- <3 pattens
-  if (p == "0246024") or (p == "135713") then return "<3" end
+  if (p == "0246024") or (p == "135713") then return "<" end
 
   return "?"
 end
