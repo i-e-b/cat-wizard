@@ -22,6 +22,7 @@ local cat = {
   health = 5,
   casting = 0, -- spell casting animation times
   zap = 0,     -- lightening zap animation time
+  hurt = 0     -- pain timer
 }
 
 local ghosts = {
@@ -47,7 +48,7 @@ function love.load()
 
   textfont = love.graphics.newFont( 14 )
   ghostFont = love.graphics.newImageFont("assets/ghostfont.png", "<I-V^ZGgdHhCc")
-  catFont = love.graphics.newImageFont("assets/catfont.png", "012345[]abcdefg")
+  catFont = love.graphics.newImageFont("assets/catfont.png", "012345[]abcdefgXx")
   castingFonts["V"] = love.graphics.newImageFont("assets/Vfont.png", "012345")
   castingFonts["^"] = love.graphics.newImageFont("assets/Hatfont.png", "012345")
   castingFonts["Z"] = love.graphics.newImageFont("assets/Zfont.png", "012345")
@@ -228,7 +229,10 @@ function biteCat(ghost)
   -- lose some health, send the ghost backward
   ghost.bite = ghost.speed / 4
   ghost.glyph = "c"
-  cat.health = math.max(0, cat.health - 1)
+  if (cat.hurt < 0.04) then
+    cat.health = math.max(0, cat.health - 1)
+  end
+  cat.hurt = 1
 end
 
 function moveGhosts(dt)
@@ -283,6 +287,8 @@ end
 function moveCat(dt)
   cat.zap = math.max(0, cat.zap - dt)
   cat.casting = math.max(0, cat.casting - dt)
+  cat.hurt = math.max(0, cat.hurt - dt)
+
   if #ghosts < 1 then -- phase over / level over?
     cat.walkOffset = cat.walkOffset + dt*30*screenScale
     if (cat.walkOffset > screenCentre.x) then -- off screen, now transition
@@ -300,7 +306,9 @@ function love.update(dt)
 
   moveGhosts(dt)
   moveCat(dt)
-  readInputs()
+  if cat.hurt < 0.04 then
+    readInputs()
+  end
   love.graphics.setBackgroundColor( 40, 40, 70 )
 end
 
@@ -396,6 +404,9 @@ function drawCat()
     love.graphics.print(glyph, cat.walkOffset + cx,cy, 0, ss)
   elseif cat.active then
     local glyph = ""..math.floor((globalTime * 10) % 6)
+    love.graphics.print(glyph, cx,cy, 0, ss)
+  elseif cat.hurt > 0 then
+    local glyph = "X"; if math.floor((globalTime * 10) % 2) > 0 then glyph = "x" end
     love.graphics.print(glyph, cx,cy, 0, ss)
   elseif cat.casting > 0 then
     local f = castingFonts[lastSpell]

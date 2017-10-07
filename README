@@ -5,6 +5,7 @@
  [x] cat casting animations
  [x] health
  [x] damage
+ [x] damage animation, i-frames
  [ ] game over
  [x] basic ghost patterns and movement
  [x] ghost death
