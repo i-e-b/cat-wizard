@@ -25,12 +25,45 @@ local cat = {
   hurt = 0     -- pain timer
 }
 
+local levels = {
+  {background=1, patternLength=1, count=3, waves=3, speed=15},
+  {background=2, patternLength=3, count=5, waves=5, speed=10},
+  {background=3, patternLength=3, count=7, waves=5, speed=5},
+  {background=4, patternLength=6, count=10, waves=7, speed=5},
+}
+local currentLevel = 1
+local currentWave = 1
+
 local ghosts = {
   {x=20,  y=20,  hurt=0.0, speed=14, pat="^I"}, --  -I^V"},  -- speed is seconds from edge to centre
   {x=740, y=20,  hurt=0.0, speed=17, pat="-I"}, --  -IIVV"}, -- 'dead' get set when the ghost is defeated
   {x=20,  y=550, hurt=0.0, speed=17, pat="<"}, --  ^V^"},
   {x=740, y=550, hurt=0.0, speed=17, pat="Z"}, --  IVIV"}
 }
+
+function generatePattern(len)
+  local s = "I-V^"
+  local x = ""
+  for i=1,len do
+    local p = math.ceil(math.random(0, 4))
+    x = x..(string.sub(s,p,p))
+  end
+  return x
+end
+
+function loadWave()
+  ghosts = {}
+  local lv = levels[currentLevel]
+  for i=0,lv.count do
+    table.insert(ghosts, {
+      x = (math.cos(i)* screenCentre.x) + screenCentre.x,
+      y = (math.sin(i)* screenCentre.y) + screenCentre.y,
+      hurt = 0,
+      speed = lv.speed,
+      pat = generatePattern(lv.patternLength)
+    })
+  end
+end
 
 function love.load()
   px = 0
@@ -55,6 +88,8 @@ function love.load()
   castingFonts["I"] = love.graphics.newImageFont("assets/Ifont.png", "012345")
   castingFonts["-"] = love.graphics.newImageFont("assets/-font.png", "012345")
   castingFonts["<"] = love.graphics.newImageFont("assets/heartfont.png", "012345")
+
+  loadWave()
 end
 
 function love.keypressed(key)
@@ -304,8 +339,18 @@ function moveCat(dt)
   end
 end
 
+function checkLevel()
+  if #ghosts < 1 then -- end of wave
+    currentWave = currentWave + 1
+    if currentWave <= levels[currentLevel].waves then
+      loadWave()
+    end
+  end
+end
+
 function love.update(dt)
   if dt > 0.7 then return end
+  checkLevel()
 
   globalTime = globalTime + dt
   fadeColor.a = math.max(0, fadeColor.a * 0.9)
