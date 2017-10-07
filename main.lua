@@ -28,7 +28,7 @@ local cat = {
 local ghosts = {
   {x=20,  y=20,  hurt=0.0, speed=14, pat="^I"}, --  -I^V"},  -- speed is seconds from edge to centre
   {x=740, y=20,  hurt=0.0, speed=17, pat="-I"}, --  -IIVV"}, -- 'dead' get set when the ghost is defeated
-  {x=20,  y=550, hurt=0.0, speed=17, pat="VI"}, --  ^V^"},
+  {x=20,  y=550, hurt=0.0, speed=17, pat="<"}, --  ^V^"},
   {x=740, y=550, hurt=0.0, speed=17, pat="Z"}, --  IVIV"}
 }
 
@@ -47,7 +47,7 @@ function love.load()
   table.insert(backgrounds, love.graphics.newImage("assets/bg1.png"))
 
   textfont = love.graphics.newFont( 14 )
-  ghostFont = love.graphics.newImageFont("assets/ghostfont.png", "<I-V^ZGgdHhCc")
+  ghostFont = love.graphics.newImageFont("assets/ghostfont.png", "<I-V^ZGgdHhCcKk")
   catFont = love.graphics.newImageFont("assets/catfont.png", "012345[]abcdefgXx")
   castingFonts["V"] = love.graphics.newImageFont("assets/Vfont.png", "012345")
   castingFonts["^"] = love.graphics.newImageFont("assets/Hatfont.png", "012345")
@@ -217,6 +217,7 @@ function attackGhosts(type)
     for i=1,#ghosts do
       local g = ghosts[i]
       if (string.sub (g.pat, 1, 1) == type) then
+        if (type == "<") then cat.health = math.min(5, cat.health+1) end
         cat.casting = 1
         g.pat = string.sub (g.pat, 2)
         g.hurt = 0.5 -- time of hurt left
@@ -251,7 +252,8 @@ function moveGhosts(dt)
       activeGhosts = activeGhosts + 1
       g.hurt = math.max(0, g.hurt - dt)
       g.bite = math.max(0, g.bite - dt)
-      g.glyph = "G"
+      if (g.glyph ~= "K") then g.glyph = "G" end
+      if (g.pat == "<") then g.glyph = "K" end
 
       -- vector to centre
       local dx = cx - g.x
@@ -273,6 +275,10 @@ function moveGhosts(dt)
         g.glyph = "c"
       elseif (dist < ss * 27) then
         g.glyph = "C"
+      end
+
+      if (g.pat == "<") and (dist < ss * 300) then -- heart ghosts never attack
+        dx = -dx; dy = -dy
       end
 
       if (cat.zap < 0.04) then
@@ -335,7 +341,9 @@ function drawGhosts()
       local glyph = g.glyph;
       love.graphics.setColor(255, 255, 255, 255)
       if g.hurt > 0 then
-        if g.pat == "" then
+        if (g.glyph == "K") then
+          glyph = "k"
+        elseif g.pat == "" then
           glyph = "d"
           love.graphics.setColor(255, 255, 255, 255 * g.hurt)
         else
